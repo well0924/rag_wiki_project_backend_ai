@@ -24,7 +24,7 @@ class DocumentChunkEntity(Base):
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
     
-    # 로컬 SentenceTransformer 모델 기준 384차원 / 운영 전환 시 OpenAI text-embedding-3-small(1536차원)으로 교체
+    # 로컬 SentenceTransformer 모델 기준 512차원 / 운영 전환 시 OpenAI text-embedding-3-small(1536차원)으로 교체
     VECTOR_DIM = 1536 if settings.IS_PRODUCTION else 512
     embedding = Column(Vector(VECTOR_DIM), nullable=False)
     
