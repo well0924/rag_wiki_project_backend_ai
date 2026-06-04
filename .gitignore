@@ -1,0 +1,27 @@
+### Python 표준 제외 대상 ###
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+### 개발 툴 및 OS 관련 ###
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+.DS_Store
+Thumbs.db
+
+### 보안 및 환경 변수 (절대 노출 금지) ###
+.env
+.env.local
+.env.*.local
