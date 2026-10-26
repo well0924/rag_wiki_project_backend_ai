@@ -6,8 +6,16 @@ from app.database import AsyncSessionLocal, DocumentChunkEntity
 from sqlalchemy import text
 from app.utile.embedding import generate_embeddings
 
-# API Key는 Pydantic settings로부터 안전하게 획득
-openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+# OpenAI 클라이언트는 운영 분기에서 최초 사용 시점에 생성
+# (로컬 개발 모드는 OPENAI_API_KEY 없이도 서버가 기동되어야 하므로 import 시점 생성 금지)
+_openai_client = None
+
+def get_openai_client() -> AsyncOpenAI:
+    global _openai_client
+    if _openai_client is None:
+        # API Key는 Pydantic settings로부터 안전하게 획득
+        _openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    return _openai_client
 
 def split_text_by_tokens(text: str, chunk_size: int = 500, chunk_overlap: int = 50) -> list[str]:
     tokenizer = tiktoken.get_encoding("cl100k_base")
@@ -31,7 +39,7 @@ async def get_embedding_vector(texts: list[str]) -> list[list[float]]:
         return await loop.run_in_executor(None, generate_embeddings, texts)
     
     print("🚀 [Production] OpenAI Embedding API 호출 중...")
-    response = await openai_client.embeddings.create(
+    response = await get_openai_client().embeddings.create(
         input=texts,
         model="text-embedding-3-small"
     )
@@ -135,7 +143,7 @@ async def generate_rag_answer(query: str, context_chunks: list[str]) -> str:
     )
 
     try:
-        response = await openai_client.chat.completions.create(
+        response = await get_openai_client().chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},

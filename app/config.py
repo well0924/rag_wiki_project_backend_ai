@@ -12,8 +12,12 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "root"
     POSTGRES_DB: str = "wiki"
+    # 3. Spring Boot ↔ FastAPI 내부 통신 설정
+    SPRING_BOOT_URL: str = "http://localhost:89"
+    # 서버 간 공유 키 (로컬 기본값 / 운영에서는 반드시 환경변수로 교체, Spring의 internal.api-key와 동일해야 함)
+    INTERNAL_API_KEY: str = "local-internal-api-key"
 
-    # 3. 개별 변수들을 조합해서 완벽한 비동기 DB 주소 반환 (Property 활용)
+    # 4. 개별 변수들을 조합해서 완벽한 비동기 DB 주소 반환 (Property 활용)
     @computed_field
     @property
     def DATABASE_URL(self) -> str:
