@@ -28,6 +28,7 @@ async def rag_search(request: PythonSearchRequest):
         relevant_chunks = await search_relevant_chunks_with_permission(
             query=request.query,
             user_group_ids=request.user_group_ids,
+            is_admin=request.is_admin,
             limit=3
         )
 
