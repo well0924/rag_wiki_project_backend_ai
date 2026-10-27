@@ -162,19 +162,20 @@ Spring Batch → DELETE /api/v1/vector/clear/{document_id} → pgvector 청크 �
 ---
  
  
-| 항목 | 개발 (IS_PRODUCTION=false) | 운영 (IS_PRODUCTION=true) |
+임베딩과 답변 생성(LLM)은 환경변수로 각각 따로 전환합니다.
+
+| 환경변수 | 값 | 동작 |
 |---|---|---|
-| 임베딩 모델 | SentenceTransformers (로컬, 512차원) | OpenAI text-embedding-3-small (1536차원) |
-| LLM | Mock 응답 (GPT 호출 없음) | OpenAI gpt-4o-mini |
-| pgvector 차원 | 512 | 1536 |
+| `EMBEDDING_PROVIDER` | `local` (기본) | SentenceTransformers `distiluse-base-multilingual-cased-v1` (512차원) |
+| | `openai` | OpenAI text-embedding-3-small (1536차원) |
+| `LLM_PROVIDER` | `mock` (기본) | 검색된 청크를 그대로 반환 (GPT 호출 없음) |
+| | `openai` | OpenAI gpt-4o-mini |
+
+예) 임베딩은 로컬 모델로 비용 없이 처리하고 답변만 GPT로 생성: `EMBEDDING_PROVIDER=local`, `LLM_PROVIDER=openai`
  
-임베딩 모델에 따라 벡터 차원이 달라지므로, `IS_PRODUCTION` 플래그로
-pgvector 컬럼 차원(`VECTOR_DIM`)도 함께 분기하여 환경 전환 시 스키마 불일치를 방지합니다.
- 
-```python
-VECTOR_DIM = 1536 if settings.IS_PRODUCTION else 512
-embedding = Column(Vector(VECTOR_DIM), nullable=False)
-```
+`document_chunks` 테이블은 FastAPI가 기동 시 생성합니다 (`CREATE EXTENSION vector` + `create_all`, 이미 있으면 건너뜀).
+임베딩 모델에 따라 벡터 차원이 달라지므로, 기존 테이블의 `embedding` 차원이 현재 `EMBEDDING_PROVIDER`와 다르면
+기동을 중단합니다. 모델을 바꿀 때는 테이블을 재생성하고 문서를 재인덱싱해야 합니다.
  
 ---
 

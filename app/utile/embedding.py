@@ -7,7 +7,7 @@ _local_model = None
 
 def get_model():
     global _local_model
-    if not settings.IS_PRODUCTION and _local_model is None:
+    if settings.EMBEDDING_PROVIDER == "local" and _local_model is None:
         print("📥 [Embedding] 다국어(한글 지원) 로컬 임베딩 모델 로드 중...")
         _local_model = SentenceTransformer('distiluse-base-multilingual-cased-v1')
     return _local_model
