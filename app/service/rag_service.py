@@ -46,7 +46,11 @@ async def get_embedding_vector(texts: list[str]) -> list[list[float]]:
     return [data.embedding for data in response.data]
 
 async def process_and_store_document(document_id: int, content: str):
-    """수정된 인덱싱 파이프라인 (세션 커밋 안정성 확보)"""
+    """
+    수정된 인덱싱 파이프라인 (세션 커밋 안정성 확보)
+    - 같은 문서가 다시 들어와도(메시지 재전달, 재처리) 청크가 중복 적재되지 않도록
+      기존 청크 삭제 + 신규 적재를 하나의 트랜잭션으로 처리 (멱등성)
+    """
     chunks = split_text_by_tokens(content, chunk_size=500, chunk_overlap=50)
     if not chunks:
         return
@@ -55,6 +59,10 @@ async def process_and_store_document(document_id: int, content: str):
 
     async with AsyncSessionLocal() as session:
         async with session.begin():
+            await session.execute(
+                text("DELETE FROM public.document_chunks WHERE document_id = :document_id"),
+                {"document_id": document_id}
+            )
             for i, (chunk_text, emb_vector) in enumerate(zip(chunks, embeddings)):
                 chunk_entity = DocumentChunkEntity(
                     document_id=document_id,
