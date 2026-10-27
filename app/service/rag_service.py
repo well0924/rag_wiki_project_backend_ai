@@ -32,13 +32,13 @@ def split_text_by_tokens(text: str, chunk_size: int = 500, chunk_overlap: int = 
     return chunks
 
 async def get_embedding_vector(texts: list[str]) -> list[list[float]]:
-    """[핵심 통합 함수] 환경에 따라 로컬 모델/OpenAI 자동 전환"""
-    if not settings.IS_PRODUCTION:
-        print("🛠 [Development] 로컬 임베딩 모델 실행 중...")
+    """[핵심 통합 함수] EMBEDDING_PROVIDER 설정에 따라 로컬 모델/OpenAI 전환"""
+    if settings.EMBEDDING_PROVIDER == "local":
+        print("🛠 [Embedding: local] 로컬 임베딩 모델 실행 중...")
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, generate_embeddings, texts)
     
-    print("🚀 [Production] OpenAI Embedding API 호출 중...")
+    print("🚀 [Embedding: openai] OpenAI Embedding API 호출 중...")
     response = await get_openai_client().embeddings.create(
         input=texts,
         model="text-embedding-3-small"
@@ -125,15 +125,15 @@ async def clear_vector_chunks(document_id: int):
 async def generate_rag_answer(query: str, context_chunks: list[str]) -> str:
     """
     [LLM 생성 분기] 
-    - 로컬(Development): GPT를 쓰지 않으므로 추출된 청크 기반의 Mock 데이터 반환
-    - 운영(Production): OpenAI gpt-4o-mini API 호출
+    - LLM_PROVIDER=mock: GPT를 쓰지 않으므로 추출된 청크 기반의 Mock 데이터 반환
+    - LLM_PROVIDER=openai: OpenAI gpt-4o-mini API 호출
     """
     if not context_chunks:
         return "죄송합니다. 질문하신 내용에 대해 접근 권한이 있는 문서가 존재하지 않거나 관련 정보를 찾을 수 없습니다."
 
     # 1. 로컬 개발 환경: GPT API 호출 없이 로컬용 Mock 답변 서빙
-    if not settings.IS_PRODUCTION:
-        print("🛠 [Development] 로컬 환경 - GPT API 호출을 건너뛰고 Mock 답변을 생성합니다.")
+    if settings.LLM_PROVIDER == "mock":
+        print("🛠 [LLM: mock] GPT API 호출을 건너뛰고 Mock 답변을 생성합니다.")
         
         mock_response = (
             "🤖 [로컬 개발 모드 안내]\n"
