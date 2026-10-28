@@ -1,0 +1,12 @@
+.venv
+venv
+env
+**/__pycache__
+**/*.pyc
+.env
+.git
+.github
+.idea
+.vscode
+README.md
+requirements-local.txt

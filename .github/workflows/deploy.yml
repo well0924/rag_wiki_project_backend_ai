@@ -1,0 +1,48 @@
+name: AI Server Deploy
+
+# 서버(EC2) 준비 전까지는 수동 실행만 허용 (Actions 탭 → AI Server Deploy → Run workflow)
+# 서버 준비 후 자동 배포로 전환하려면 아래 push 트리거 주석 해제
+# 필요 Secrets: EC2_HOST, EC2_USER, EC2_SSH_KEY
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [ main ]
+
+env:
+  IMAGE: ghcr.io/well0924/wiki-ai
+
+jobs:
+  # GHCR에 이미지 푸시 후 EC2에서 AI 컨테이너만 교체
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/wiki
+            docker compose pull ai
+            docker compose up -d ai
+            docker image prune -f
