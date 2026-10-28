@@ -3,11 +3,19 @@ name: AI Server CI
 on:
   pull_request:
     branches: [ main ]
+    # 문서만 바뀐 경우 CI 생략
+    paths-ignore: [ "**.md", "docs/**" ]
   push:
     branches: [ main ]
+    paths-ignore: [ "**.md", "docs/**" ]
+
+# 같은 브랜치에 새 커밋이 올라오면 이전 실행은 취소
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  # 의존성 설치 + 앱 import 검증 + Docker 이미지 빌드 가능 여부 확인
+  # 의존성 설치 + 단위 테스트 + 앱 import 검증 + Docker 이미지 빌드 가능 여부 확인
   ci:
     runs-on: ubuntu-latest
     steps:
@@ -19,7 +27,11 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
+
+      # DB / Redis / OpenAI 없이 가짜 객체로 핵심 로직만 검증 (청킹, 환각 방지, 워커 재시도/DLQ)
+      - name: Unit tests
+        run: pytest -q
 
       - name: Import check (openai 모드 기준)
         env:

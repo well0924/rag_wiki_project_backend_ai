@@ -25,3 +25,5 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+### 테스트 ###
+.pytest_cache/

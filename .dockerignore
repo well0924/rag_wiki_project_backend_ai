@@ -10,3 +10,7 @@ env
 .vscode
 README.md
 requirements-local.txt
+tests
+pytest.ini
+requirements-dev.txt
+.pytest_cache

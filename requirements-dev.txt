@@ -1,0 +1,4 @@
+# 테스트 / CI 용 (운영 이미지에는 포함하지 않음)
+-r requirements.txt
+pytest==8.4.2
+pytest-asyncio==1.2.0

@@ -133,12 +133,16 @@ async def search_relevant_chunks_with_permission(query: str, user_group_ids: lis
             for row in rows
         ]
 
-    relevant = [c for c in chunks if c["similarity"] >= settings.SEARCH_MIN_SIMILARITY]
+    relevant = filter_by_similarity(chunks, settings.SEARCH_MIN_SIMILARITY)
     print(
         f"🔎 [검색] 후보 {len(chunks)}개 중 유사도 {settings.SEARCH_MIN_SIMILARITY} 이상 {len(relevant)}개 "
         f"(점수: {[round(c['similarity'], 3) for c in chunks]})"
     )
     return relevant
+
+def filter_by_similarity(chunks: list[dict], min_similarity: float) -> list[dict]:
+    """[환각 방지] 유사도 하한 미만 청크 제거 (하한과 같은 점수는 통과)"""
+    return [c for c in chunks if c["similarity"] >= min_similarity]
 
 async def clear_vector_chunks(document_id: int):
     """새벽 스프링 배치 진영의 원격 파기 신호를 처리하는 코어 엔드포인트 서비스 로직"""
@@ -245,12 +249,12 @@ async def generate_rag_answer(query: str, context_chunks: list[dict]) -> dict:
     cited = {int(n) for n in re.findall(r"\[(\d+)\]", answer) if 1 <= int(n) <= len(context_chunks)}
     # 인용 표기를 빠뜨린 경우에는 근거로 제공한 문서 전체를 출처로 노출
     sources, number_map = _collect_sources(context_chunks, cited or None)
-    # 답변 속 청크 번호를 출처 목록 번호로 치환 (존재하지 않는 번호를 지어낸 경우 표기 제거)
+    # 답변 속 청크 번호를 출처 목록 번호로 치환 (존재하지 않는 번호를 지어낸 경우 앞 공백과 함께 표기 제거)
     answer = re.sub(
-        r"\[(\d+)\]",
-        lambda m: f"[{number_map[int(m.group(1))]}]" if int(m.group(1)) in number_map else "",
+        r"([ \t]*)\[(\d+)\]",
+        lambda m: f"{m.group(1)}[{number_map[int(m.group(2))]}]" if int(m.group(2)) in number_map else "",
         answer
     )
-    # 같은 문서의 청크 여러 개를 연달아 인용한 경우 "[1][1]" → "[1]"
-    answer = re.sub(r"(\[\d+\])\1+", r"\1", answer)
+    # 같은 문서의 청크 여러 개를 연달아 인용한 경우 "[1][1]", "[1] [1]" → "[1]"
+    answer = re.sub(r"(\[\d+\])(?:[ \t]*\1)+", r"\1", answer)
     return {"answer": answer, "sources": sources}

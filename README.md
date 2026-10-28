@@ -103,6 +103,23 @@ FastAPI AI 워커가 이를 소비하여 벡터 인덱싱을 수행합니다.
 4. pgvector에 청크별 벡터 저장
 5. ACK 송신으로 메시지 처리 완료 확인
 ```
+
+### 실패 처리 (재시도 / DLQ)
+
+처리에 실패한 메시지는 ACK 하지 않아 Consumer Group의 PEL(Pending Entries List)에 남습니다.
+`XREADGROUP >`는 새 메시지만 읽기 때문에, 워커가 30초마다 PEL을 점검해 1분 이상 ACK 되지 않은 메시지를 `XCLAIM`으로 다시 가져옵니다.
+
+| 상황 | 처리 |
+|---|---|
+| 일시적 오류 (네트워크, 타임아웃, OpenAI 429/5xx, DB 연결) | ACK 하지 않음 → 1분 뒤 재처리 (최초 포함 최대 3회) |
+| 3회 모두 실패 | `document:upload:dlq` 스트림으로 이동 후 ACK |
+| 재시도해도 결과가 같은 오류 (잘못된 입력, 벡터 차원 불일치 등) | 즉시 DLQ로 이동 |
+| 페이로드 누락 (`documentId`/`content` 없음) | 즉시 DLQ로 이동 (상태 콜백 없음) |
+| 처리 중 워커 종료 | 재기동 후 PEL에서 회수하여 재처리 |
+
+- 실패할 때마다 Spring에 `FAILED`를 알리고, 재시도에 성공하면 `FAILED → PROCESSING → COMPLETED`로 복구됩니다.
+- DLQ 메시지에는 원본 필드와 함께 `originalMessageId`, `reason`, `failedAt`이 남아 원인 확인 후 재발행할 수 있습니다 (최근 1,000건 보관).
+- 재처리 직전 청크를 지우고 다시 적재하므로(멱등성), 같은 메시지를 여러 번 처리해도 청크가 중복되지 않습니다.
  
 ### 동작 캡처
  
@@ -193,6 +210,25 @@ Spring Batch → DELETE /api/v1/vector/clear/{document_id} → pgvector 청크 �
 | `SEARCH_TOP_K` | `3` | LLM에 근거로 넘길 최대 청크 수 |
 | `SEARCH_MIN_SIMILARITY` | `0.3` | 유사도 하한 (임베딩 모델마다 점수 분포가 달라 평가셋으로 보정) |
  
+---
+
+## 🧪 테스트
+
+DB, Redis, OpenAI 없이 가짜 객체로 핵심 로직만 검증합니다. (DB/Redis가 포함된 전체 흐름은 백엔드 저장소의 통합 테스트에서 확인)
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+| 파일 | 검증 내용 |
+|---|---|
+| `tests/test_chunking.py` | 청크 크기 상한, 청크 간 50토큰 겹침, 원문 누락 없음 |
+| `tests/test_rag_answer.py` | 유사도 하한, 근거 없을 때 LLM 미호출, `NO_ANSWER` 치환, 인용 번호 재정렬·중복 제거·지어낸 번호 제거 |
+| `tests/test_worker.py` | 성공 시 ACK, 일시적 오류 재시도, 3회 실패·재시도 불가 오류 DLQ 이동, PEL 회수 |
+
+PR과 `main` 반영 시 GitHub Actions에서 자동으로 실행됩니다.
+
 ---
 
 
