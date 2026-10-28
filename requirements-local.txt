@@ -1,0 +1,5 @@
+# 로컬 개발용 (EMBEDDING_PROVIDER=local): 기본 의존성 + SentenceTransformers(torch 포함)
+-r requirements.txt
+sentence-transformers==5.1.2
+torch==2.8.0
+transformers==4.57.6

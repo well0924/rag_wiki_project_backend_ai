@@ -2,6 +2,7 @@
 import traceback
 from fastapi import APIRouter, Depends, status, HTTPException
 from pydantic import BaseModel, Field
+from app.config import settings
 from app.security import verify_internal_api_key
 from app.service.rag_service import clear_vector_chunks, search_relevant_chunks_with_permission, generate_rag_answer
 
@@ -29,21 +30,20 @@ async def rag_search(request: PythonSearchRequest):
             query=request.query,
             user_group_ids=request.user_group_ids,
             is_admin=request.is_admin,
-            limit=3
+            limit=settings.SEARCH_TOP_K
         )
 
-        # 💡 순수 딕셔너리 구조에서 content 리스트 발라내기
-        context_chunks = [chunk["content"] for chunk in relevant_chunks]
         # 💡 코틀린 search_history 적재용 ID 리스트 발라내기
         referenced_chunk_ids = [chunk["id"] for chunk in relevant_chunks]
 
-        # 2. 답변 생성 엔진 가동
-        ai_answer = await generate_rag_answer(query=request.query, context_chunks=context_chunks)
+        # 2. 답변 생성 엔진 가동 (답변 + 근거 문서)
+        result = await generate_rag_answer(query=request.query, context_chunks=relevant_chunks)
 
         # 코틀린 PythonSearchResponse 스펙과 자형 일치화
         return {
-            "answer": ai_answer,
-            "referencedChunkIds": referenced_chunk_ids
+            "answer": result["answer"],
+            "referencedChunkIds": referenced_chunk_ids,
+            "sources": result["sources"]
         }
 
     except Exception:
