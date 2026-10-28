@@ -5,7 +5,7 @@ from sqlalchemy import BigInteger, Column, Integer, Text, text
 from pgvector.sqlalchemy import Vector
 from app.config import settings
 
-# 1. 완벽한 논블로킹 처리를 위한 비동기 DB 엔진 인프라 구성
+# 비동기 DB 엔진 / 세션 팩토리
 engine = create_async_engine(settings.DATABASE_URL, echo=False)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
@@ -22,7 +22,7 @@ class DocumentChunkEntity(Base):
 
     # Spring documents.id(bigint)와 타입 일치
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    document_id = Column(BigInteger, nullable=False, index=True)  # 권한 필터링용 핵심 외래 식별 키
+    document_id = Column(BigInteger, nullable=False, index=True)  # documents.id 참조 (권한 필터 조인 / 문서 단위 삭제에 사용)
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
 

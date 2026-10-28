@@ -9,7 +9,7 @@ from app.service.rag_service import clear_vector_chunks, search_relevant_chunks_
 # 모든 엔드포인트는 Spring Boot 서버만 호출 가능 (X-Internal-Api-Key 검증)
 router = APIRouter(prefix="/api/v1/rag", tags=["Search"], dependencies=[Depends(verify_internal_api_key)])
 
-# 코틀린 서버에서 넘어오는 데이터 모델 (DTO)
+# Spring Boot 검색 요청 DTO
 class PythonSearchRequest(BaseModel):
     query: str
     user_group_ids: list[int] = Field(..., alias="userGroupIds")
@@ -21,11 +21,11 @@ class PythonSearchRequest(BaseModel):
 @router.post("/search")
 async def rag_search(request: PythonSearchRequest):
     """
-    [RAG 코어 엔진 엔드포인트]
-    코틀린 시큐리티 필터를 통과한 유저 권한 목록을 기반으로 컨텍스트 솎아낸 후 답변 반환
+    [RAG 검색 엔드포인트]
+    Spring Boot가 인증한 사용자의 그룹 권한 범위 안에서 근거 청크를 찾아 답변 생성
     """
     try:
-        # 1. 권한 범위 내에서 고밀도 유사도 검색 실행
+        # 1. 권한 범위 안에서 유사도 검색
         relevant_chunks = await search_relevant_chunks_with_permission(
             query=request.query,
             user_group_ids=request.user_group_ids,
@@ -33,13 +33,13 @@ async def rag_search(request: PythonSearchRequest):
             limit=settings.SEARCH_TOP_K
         )
 
-        # 💡 코틀린 search_history 적재용 ID 리스트 발라내기
+        # Spring search_history 에 저장할 참조 청크 ID 목록
         referenced_chunk_ids = [chunk["id"] for chunk in relevant_chunks]
 
-        # 2. 답변 생성 엔진 가동 (답변 + 근거 문서)
+        # 2. 답변 생성 (답변 + 근거 문서)
         result = await generate_rag_answer(query=request.query, context_chunks=relevant_chunks)
 
-        # 코틀린 PythonSearchResponse 스펙과 자형 일치화
+        # Spring PythonSearchResponse 필드명(camelCase)과 일치
         return {
             "answer": result["answer"],
             "referencedChunkIds": referenced_chunk_ids,
@@ -58,8 +58,8 @@ async def rag_search(request: PythonSearchRequest):
 @router.delete("/vector/clear/{document_id}")
 async def clear_vector(document_id: int):
     """
-    [새벽 스프링 배치 연동 엔드포인트]
-    RDB에서 삭제 처리된 문서의 고차원 벡터 임베딩 데이터를 영구 파기
+    [영구 삭제 배치 연동 엔드포인트]
+    Soft Delete된 문서의 벡터 청크를 영구 삭제
     """
     try:
         await clear_vector_chunks(document_id)

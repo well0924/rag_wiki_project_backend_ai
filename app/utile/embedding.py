@@ -1,4 +1,4 @@
-# app/service/embedding.py
+# app/utile/embedding.py
 from app.config import settings
 
 # 모델을 미리 로드하여 재사용

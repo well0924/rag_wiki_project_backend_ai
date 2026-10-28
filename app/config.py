@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     # - LLM_PROVIDER: mock(검색 청크를 그대로 반환) | openai(gpt-4o-mini)
     EMBEDDING_PROVIDER: Literal["local", "openai"] = "local"
     LLM_PROVIDER: Literal["mock", "openai"] = "mock"
-    # 2. 자바(Spring Boot)와 일치시킨 데이터베이스 개별 환경 변수
+    # 2. 데이터베이스 접속 정보 (Spring Boot와 같은 DB 사용)
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "postgres"
@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     SEARCH_TOP_K: int = 3
     SEARCH_MIN_SIMILARITY: float = 0.3
 
-    # 5. 개별 변수들을 조합해서 완벽한 비동기 DB 주소 반환 (Property 활용)
+    # 5. 개별 접속 정보를 조합한 비동기(asyncpg) DB URL
     @computed_field
     @property
     def DATABASE_URL(self) -> str:

@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
     # 백그라운드 Redis Streams 컨슈머 가동
     worker_task = asyncio.create_task(consume_upload_stream())
     print("▶️ FastAPI Startup: 백그라운드 Redis 컨슈머 태스크 가동 완료.")
-    yield  # ─── 이 지점에서 서버가 정상 구동되어 코틀린의 REST API를 수신함 ───
+    yield  # 여기서부터 요청 처리 시작 (종료 시 아래 코드 실행)
     print("⏸️ FastAPI Shutdown: 백그라운드 태스크 종료 중...")
     worker_task.cancel()
     try:

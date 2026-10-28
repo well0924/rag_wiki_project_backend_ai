@@ -8,7 +8,7 @@ import httpx
 from sqlalchemy.exc import InterfaceError, OperationalError
 from app.config import settings
 from app.security import internal_auth_headers
-from app.service.rag_service import process_and_store_document  # 실제 인덱싱 서비스 주입
+from app.service.rag_service import process_and_store_document
 
 # Spring Boot 내부 전용(Internal API Key 인증) 문서 상태 변경 엔드포인트
 STATUS_CALLBACK_URL = f"{settings.SPRING_BOOT_URL}/api/v1/internal/documents"
@@ -97,7 +97,7 @@ async def handle_message(redis_client, http_client: httpx.AsyncClient, message_i
     """
     fields = decode_fields(message_data)
     document_id_raw = fields.get("documentId", "")
-    content = fields.get("content")  # 스프링이 밀어넣어준 본문 알맹이 안착
+    content = fields.get("content")  # Spring 이 추출한 문서 본문 텍스트
 
     if not document_id_raw.isdigit() or not content:
         print(f" [유효하지 않은 페이로드] Message ID: {_to_str(message_id)}")
@@ -118,14 +118,12 @@ async def handle_message(redis_client, http_client: httpx.AsyncClient, message_i
     try:
         await update_document_status(http_client, document_id, "PROCESSING")
 
-        # -------------------------------------------------------------
-        # 실전 RAG 인덱싱 비동기 가동 (청킹 -> 임베딩 -> pgvector 적재)
-        # -------------------------------------------------------------
+        # 청킹 -> 임베딩 -> pgvector 적재
         await process_and_store_document(document_id, content)
 
         await update_document_status(http_client, document_id, "COMPLETED")
 
-        # 메시지 정상 처리 통보 (ACK 날리기)
+        # 처리 완료 ACK
         await redis_client.xack(STREAM_KEY, GROUP_NAME, message_id)
         print(f"✅ [이벤트 처리 완료] Message ID: {_to_str(message_id)} ACK 송신 완료.")
 
@@ -186,7 +184,7 @@ async def consume_upload_stream():
     # 0으로 시작하여 기동 직후 이전 실행에서 남은 미처리 메시지부터 회수
     last_reclaim_at = 0.0
 
-    # 스프링 부트 엔드포인트와 통신할 넌블로킹 HTTP 세션 가동
+    # Spring 상태 콜백용 비동기 HTTP 클라이언트
     async with httpx.AsyncClient(timeout=10.0) as http_client:
         while True:
             if time.monotonic() - last_reclaim_at >= RECLAIM_INTERVAL_SECONDS:
