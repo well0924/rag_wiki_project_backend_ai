@@ -21,20 +21,10 @@ RAG(Retrieval-Augmented Generation) 기반 사내 위키 검색 서버입니다.
 | 검색 | 검색 기록 / 피드백 저장 | 벡터 검색, LLM 답변 생성, 환각 방지 |
 | 테이블 소유 | `documents`, `document_permissions` 등 | `document_chunks` |
 
-```mermaid
-flowchart LR
-    FE["Next.js<br/>(Vercel)"] -->|HTTPS| SB["Spring Boot"]
-    SB -->|"XADD 문서 업로드 이벤트"| RS[("Redis Streams")]
-    RS -->|XREADGROUP| W["FastAPI 워커"]
-    W -->|"상태 콜백 (PROCESSING / COMPLETED / FAILED)"| SB
-    SB -->|"POST /api/v1/rag/search"| API["FastAPI 검색 API"]
-    W --> PG[("PostgreSQL + pgvector")]
-    API --> PG
-    W -.->|임베딩| OAI["OpenAI"]
-    API -.->|"임베딩 / 답변 생성"| OAI
-```
+![rag_wiki 배포 구조](https://raw.githubusercontent.com/well0924/rag_wiki_project_backend/main/docs/images/architecture.png)
 
 > Spring ↔ FastAPI 간 호출은 모두 `X-Internal-Api-Key` 공유 키로 인증하며, 외부에서는 FastAPI에 직접 접근할 수 없습니다.
+> 그림은 [백엔드 저장소](https://github.com/well0924/rag_wiki_project_backend)에서 관리하며, 데이터 구조(ERD)와 권한 규칙은 [비즈니스 로직 상세](https://github.com/well0924/rag_wiki_project_backend/blob/main/docs/business-logic.md)를 참고하세요.
 
 ---
 
