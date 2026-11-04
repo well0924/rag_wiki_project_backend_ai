@@ -7,12 +7,18 @@ from app.database import init_db
 from app.routers import search
 from app.service.rag_service import clear_vector_chunks, generate_rag_answer, search_relevant_chunks_with_permission
 from app.service.worker import consume_upload_stream
+from app.utile.embedding import warm_up_model
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 벡터 테이블 준비 (워커가 청크를 적재하기 전에 반드시 완료)
     await init_db()
     print(f"▶️ FastAPI Startup: document_chunks 준비 완료 (embedding={settings.EMBEDDING_PROVIDER}, llm={settings.LLM_PROVIDER})")
+
+    # 로컬 임베딩 모델 미리 로드 (첫 검색 요청이 모델 로드 시간만큼 늦어지지 않도록)
+    # 로드는 블로킹 작업이라 별도 스레드에서 실행하고, 끝날 때까지 요청을 받지 않음
+    if await asyncio.to_thread(warm_up_model):
+        print("▶️ FastAPI Startup: 로컬 임베딩 모델 로드 완료")
 
     # 백그라운드 Redis Streams 컨슈머 가동
     worker_task = asyncio.create_task(consume_upload_stream())

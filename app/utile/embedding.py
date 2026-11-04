@@ -14,6 +14,17 @@ def get_model():
         _local_model = SentenceTransformer('distiluse-base-multilingual-cased-v1')
     return _local_model
 
+def warm_up_model() -> bool:
+    """
+    서버 시작 시 로컬 모델을 미리 로드
+    - 첫 검색 요청에서 모델을 로드하면 응답이 Spring의 요청 제한 시간을 넘길 수 있어, 요청을 받기 전에 로드해 둠
+    - local 모드가 아니면(openai) 아무것도 하지 않고 False 반환
+    """
+    if settings.EMBEDDING_PROVIDER != "local":
+        return False
+    get_model()
+    return True
+
 def generate_embeddings(texts: list[str]) -> list[list[float]]:
     """로컬 모델을 이용해 임베딩 생성"""
     model = get_model()
