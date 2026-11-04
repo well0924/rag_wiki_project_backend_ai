@@ -12,8 +12,8 @@ router = APIRouter(prefix="/api/v1/rag", tags=["Search"], dependencies=[Depends(
 # Spring Boot 검색 요청 DTO
 class PythonSearchRequest(BaseModel):
     query: str
+    # 관리자도 소속 그룹 문서만 검색하므로 관리자 여부는 받지 않음 (예전 Spring이 isAdmin을 보내도 무시됨)
     user_group_ids: list[int] = Field(..., alias="userGroupIds")
-    is_admin: bool = Field(..., alias="isAdmin")
 
     class Config:
         populate_by_name = True  # 스네이크/카멜 케이스 양방향 매핑 허용
@@ -29,7 +29,6 @@ async def rag_search(request: PythonSearchRequest):
         relevant_chunks = await search_relevant_chunks_with_permission(
             query=request.query,
             user_group_ids=request.user_group_ids,
-            is_admin=request.is_admin,
             limit=settings.SEARCH_TOP_K
         )
 

@@ -76,15 +76,21 @@ async def process_and_store_document(document_id: int, content: str):
         # session.begin() 블록을 빠져나와 커밋이 끝난 뒤 로그 출력
         print(f"💾 [pgvector 적재 완료] Document ID: {document_id}, 총 {len(chunks)}개 청크 저장 성공.")
 
-async def search_relevant_chunks_with_permission(query: str, user_group_ids: list[int], is_admin: bool = False, limit: int = 3) -> list[dict]:
+async def search_relevant_chunks_with_permission(query: str, user_group_ids: list[int], limit: int = 3) -> list[dict]:
     """
     권한 필터 벡터 검색
     - Soft Delete된 문서(documents.is_deleted)는 배치 파기 전이라도 검색 대상에서 즉시 제외
     - 권한 확인은 EXISTS로 수행하여, 여러 허용 그룹에 걸친 문서의 청크가 중복 반환되지 않도록 방지
-    - 관리자(is_admin)는 그룹 권한 필터 없이 전사 문서 검색 (Spring의 문서 목록 조회 규칙과 동일)
+    - 관리자도 예외 없이 소속 그룹에 공개된 문서만 검색 (Spring의 문서 목록 조회 규칙과 동일)
+    - 소속 그룹이 없으면 DB 조회 없이 빈 결과 반환
     - [환각 방지] 유사도가 SEARCH_MIN_SIMILARITY 미만인 청크는 제외
       (가장 가까운 청크라도 질문과 무관하면 LLM에 근거로 넘기지 않음)
     """
+    # 볼 수 있는 문서가 없으므로 임베딩 생성과 DB 조회를 모두 생략
+    if not user_group_ids:
+        print("🔎 [검색] 소속 그룹이 없어 검색 대상 문서 없음")
+        return []
+
     query_vector = await get_embedding_vector([query])
     vector_str = f"[{','.join(map(str, query_vector[0]))}]"
 
@@ -95,26 +101,20 @@ async def search_relevant_chunks_with_permission(query: str, user_group_ids: lis
             FROM public.document_chunks dc
             INNER JOIN public.documents d ON d.id = dc.document_id
             WHERE d.is_deleted = false
-              AND (
-                  CAST(:is_admin AS boolean)
-                  OR EXISTS (
-                      SELECT 1
-                      FROM public.document_permissions dp
-                      WHERE dp.document_id = dc.document_id
-                        AND dp.group_id = ANY(:group_ids)
-                  )
+              AND EXISTS (
+                  SELECT 1
+                  FROM public.document_permissions dp
+                  WHERE dp.document_id = dc.document_id
+                    AND dp.group_id = ANY(:group_ids)
               )
             ORDER BY dc.embedding <=> :query_vector
             LIMIT :limit
         """)
 
-        bind_groups = user_group_ids if user_group_ids else [-1]
-
         result = await session.execute(
             raw_query,
             {
-                "is_admin": is_admin,
-                "group_ids": bind_groups,
+                "group_ids": user_group_ids,
                 "query_vector": vector_str,
                 "limit": limit
             }

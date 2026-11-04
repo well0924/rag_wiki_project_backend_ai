@@ -156,3 +156,15 @@ async def test_llm_error_returns_error_message_without_sources(fake_llm):
     result = await generate_rag_answer("연차", CHUNKS)
 
     assert result == {"answer": "AI 답변 생성 중 오류가 발생했습니다.", "sources": []}
+
+
+async def test_search_without_groups_returns_empty_without_embedding(monkeypatch):
+    # 소속 그룹이 없으면 임베딩 생성과 DB 조회 없이 빈 결과 (관리자도 예외 없음)
+    async def fail_embedding(texts):
+        raise AssertionError("임베딩을 만들면 안 됨")
+
+    monkeypatch.setattr(rag_service, "get_embedding_vector", fail_embedding)
+
+    result = await rag_service.search_relevant_chunks_with_permission("배포는 언제 해?", user_group_ids=[])
+
+    assert result == []
