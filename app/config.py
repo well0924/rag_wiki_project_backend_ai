@@ -1,6 +1,6 @@
 from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import computed_field
+from pydantic import computed_field, model_validator
 
 class Settings(BaseSettings):
     # 1. AI 및 캐시 설정
@@ -39,6 +39,18 @@ class Settings(BaseSettings):
     @property
     def VECTOR_DIM(self) -> int:
         return 1536 if self.EMBEDDING_PROVIDER == "openai" else 512
+
+    # openai 모드인데 키가 비어 있으면 서버 시작 시점에 바로 실패
+    # (extra="ignore"라 .env의 키 이름이 틀리면 조용히 무시되어, 업로드 시점에야 실패하고 DLQ로 가던 문제 방지)
+    @model_validator(mode="after")
+    def _require_openai_key(self) -> "Settings":
+        uses_openai = "openai" in (self.EMBEDDING_PROVIDER, self.LLM_PROVIDER)
+        if uses_openai and not self.OPENAI_API_KEY.strip():
+            raise ValueError(
+                "EMBEDDING_PROVIDER 또는 LLM_PROVIDER가 openai인데 OPENAI_API_KEY가 비어 있습니다. "
+                ".env의 키 이름이 OPENAI_API_KEY인지 확인하세요."
+            )
+        return self
 
     # .env 파일이 존재할 경우 환경 변수를 우선적으로 로드하도록 설정
     model_config = SettingsConfigDict(
