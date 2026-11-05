@@ -155,11 +155,11 @@ async def clear_vector_chunks(document_id: int):
             await session.execute(delete_query, {"document_id": document_id})
     print(f"🧹 [Vector DB 클린징 완료] Document ID: {document_id} 관련 전체 청크 영구 삭제 성공.")
 
-NO_ANSWER_MESSAGE = "제공된 사내 문서에서 질문과 관련된 내용을 찾을 수 없습니다. 질문을 바꿔 보시거나 담당 부서에 문의해 주세요."
+NO_ANSWER_MESSAGE = "내 그룹에 공개된 문서에서 질문과 관련된 내용을 찾을 수 없습니다. 질문을 바꿔 보시거나, 문서가 공개된 그룹에 속해 있는지 확인해 주세요."
 # 문서로 답할 수 없을 때 LLM이 출력하는 고정 신호 (자유 문장 대신 신호를 받아 서버가 정해진 안내 문구로 치환)
 NO_ANSWER_SIGNAL = "NO_ANSWER"
 
-SYSTEM_PROMPT = f"""너는 사내 위키 문서 검색 어시스턴트다. 다음 규칙을 반드시 지킨다.
+SYSTEM_PROMPT = f"""너는 위키 문서 검색 어시스턴트다. 다음 규칙을 반드시 지킨다.
 1. <documents> 안의 문서 내용만 근거로 답한다. 일반 상식이나 추측으로 내용을 보태지 않는다.
 2. 근거로 사용한 문장 끝에 해당 문서 번호를 [1], [2] 형식으로 표기한다.
 3. 문서에 일부만 나와 있으면 확인되는 부분만 답하고, 나머지는 "문서에서 확인되지 않습니다"라고 밝힌다.
@@ -217,7 +217,7 @@ async def generate_rag_answer(query: str, context_chunks: list[dict]) -> dict:
         mock_response = (
             "🤖 [로컬 개발 모드 안내]\n"
             "현재 로컬 환경이므로 OpenAI API를 호출하지 않고, 검색된 컨텍스트를 반환합니다.\n\n"
-            "📝 [검색된 사내 문서 청크]\n"
+            "📝 [검색된 문서 청크]\n"
         )
         for i, chunk in enumerate(context_chunks, 1):
             mock_response += f"[{i}] ({chunk['title']}, 유사도 {chunk['similarity']:.3f}) {chunk['content'][:100]}...\n"
