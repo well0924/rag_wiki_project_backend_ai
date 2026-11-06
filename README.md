@@ -1,4 +1,4 @@
-# RAG 기반 사내 위키 검색 에이전트 (AI Server)
+# RAG 기반 그룹 위키 검색 에이전트 (AI Server)
 
 > Python · FastAPI · Redis Streams · pgvector · SentenceTransformers · OpenAI
 
@@ -6,17 +6,19 @@
 
 ## 📌 프로젝트 개요
 
-사내 문서를 업로드하면 AI가 자동으로 청킹·임베딩하여 벡터 DB에 인덱싱하고,
-임직원이 자연어로 질의하면 소속 부서 권한 기반으로 필터링된 문서만 참조하여 답변을 생성하는
-RAG(Retrieval-Augmented Generation) 기반 사내 위키 검색 서버입니다.
+그룹(회사 팀 · 스터디 · 개인 공간)에 올린 문서를 AI가 자동으로 청킹·임베딩하여 벡터 DB에 인덱싱하고,
+사용자가 자연어로 질의하면 내가 속한 그룹에 공개된 문서만 참조하여 답변을 생성하는
+RAG(Retrieval-Augmented Generation) 기반 위키 검색 서버입니다.
 
+- **데모**: 배포 후 추가 예정
 - **Spring Boot 백엔드 저장소**: [rag_wiki_project_backend](https://github.com/well0924/rag_wiki_project_backend)
+- **Next.js 프론트 저장소**: [rag_wiki_front](https://github.com/well0924/rag_wiki_front)
 
 ### 역할 분담
 
 | 구분 | Spring Boot (Kotlin) | FastAPI (Python, 이 저장소) |
 |---|---|---|
-| 인증 / 권한 | JWT, 구글 로그인, 부서 그룹 권한 판정 | 전달받은 그룹 ID로 검색 범위 제한 |
+| 인증 / 권한 | JWT, 구글 로그인, 그룹(OWNER / MEMBER) 권한 판정 | 전달받은 그룹 ID로 검색 범위 제한 |
 | 문서 | 업로드 검증, 텍스트 추출, 원본 저장, 상태 관리 | 청킹, 임베딩, pgvector 적재 |
 | 검색 | 검색 기록 / 피드백 저장 | 벡터 검색, LLM 답변 생성, 환각 방지 |
 | 테이블 소유 | `documents`, `document_permissions` 등 | `document_chunks` |
@@ -78,7 +80,7 @@ tests/                     ← pytest 단위 테스트
 | 형식 | 확장자 | 비고 |
 |---|---|---|
 | 텍스트 | `.txt` | 기본 텍스트 문서 |
-| PDF | `.pdf` | 사내 가이드, 규정 문서 등 |
+| PDF | `.pdf` | 가이드, 규정, 강의 자료 등 |
 | Word | `.docx` | 기획서, 회의록 등 |
 | Markdown | `.md` | README, ADR, 포스트모템 등 |
 
@@ -172,7 +174,7 @@ sequenceDiagram
     participant OAI as OpenAI
     participant PG as pgvector
 
-    SB->>API: POST /api/v1/rag/search (query, userGroupIds, isAdmin)
+    SB->>API: POST /api/v1/rag/search (query, userGroupIds)
     API->>OAI: 질문 임베딩
     OAI-->>API: 질문 벡터
     API->>PG: 권한 필터 + 코사인 유사도 상위 3개
@@ -196,22 +198,21 @@ SELECT dc.id, dc.document_id, d.title, dc.content,
 FROM public.document_chunks dc
 INNER JOIN public.documents d ON d.id = dc.document_id
 WHERE d.is_deleted = false
-  AND (
-      CAST(:is_admin AS boolean)
-      OR EXISTS (
-          SELECT 1 FROM public.document_permissions dp
-          WHERE dp.document_id = dc.document_id
-            AND dp.group_id = ANY(:group_ids)
-      )
+  AND EXISTS (
+      SELECT 1 FROM public.document_permissions dp
+      WHERE dp.document_id = dc.document_id
+        AND dp.group_id = ANY(:group_ids)
   )
 ORDER BY dc.embedding <=> :query_vector
 LIMIT :limit
 ```
 
-- 사용자의 `group_ids`로 접근 가능한 문서만 유사도 검색 대상에 포함시켜 타 부서 문서가 답변에 노출되지 않도록 합니다.
+- 사용자의 `group_ids`로 접근 가능한 문서만 유사도 검색 대상에 포함시켜 다른 그룹의 문서가 답변에 노출되지 않도록 합니다.
+- 권한 필터를 유사도 정렬 **전에** 적용하므로, 다른 그룹 문서가 상위 3개 자리를 차지해 내 문서가 밀려나는 일이 없습니다.
 - 권한 확인을 `JOIN` 대신 `EXISTS`로 수행하여, 여러 허용 그룹에 걸친 문서의 청크가 중복 반환되지 않습니다.
 - Soft Delete된 문서(`is_deleted`)는 배치로 벡터가 파기되기 전이라도 즉시 검색에서 제외됩니다.
-- 관리자(`is_admin`)는 그룹 필터 없이 전사 문서를 검색합니다 (Spring의 문서 목록 조회 규칙과 동일).
+- 관리자도 예외 없이 소속 그룹에 공개된 문서만 검색합니다 (Spring의 문서 목록 조회 규칙과 동일). 변경 이유는 [권한 모델 변경](https://github.com/well0924/rag_wiki_project_backend/blob/main/docs/permission-model-change.md)에 있습니다.
+- 소속 그룹이 없으면 질문 임베딩과 DB 조회를 모두 생략하고 바로 빈 결과를 반환합니다 (OpenAI 호출 비용 없음).
 
 ### 환각(Hallucination) 방지
 
@@ -282,6 +283,9 @@ sequenceDiagram
 
 예) 임베딩은 로컬 모델로 비용 없이 처리하고 답변만 GPT로 생성: `EMBEDDING_PROVIDER=local`, `LLM_PROVIDER=openai`
 
+- 둘 중 하나라도 `openai`인데 `OPENAI_API_KEY`가 비어 있으면 **서버 시작 시점에 실패**합니다. 설정 클래스가 정의되지 않은 키를 조용히 무시(`extra="ignore"`)하기 때문에, `.env`의 키 이름을 잘못 쓰면 예전에는 서버가 정상 기동한 뒤 문서 업로드 때에야 실패해 DLQ로 갔습니다.
+- `local` 임베딩 모드에서는 기동 시 모델을 미리 불러옵니다. 첫 검색이 모델 로딩까지 떠안아 Spring의 요청 시간 제한을 넘기던 문제를 막기 위해서입니다.
+
 `document_chunks` 테이블은 FastAPI가 기동 시 생성합니다 (`CREATE EXTENSION vector` + `create_all`, 이미 있으면 건너뜀).
 임베딩 모델에 따라 벡터 차원이 달라지므로, 기존 테이블의 `embedding` 차원이 현재 `EMBEDDING_PROVIDER`와 다르면
 기동을 중단합니다. 모델을 바꿀 때는 테이블을 재생성하고 문서를 재인덱싱해야 합니다.
@@ -309,7 +313,9 @@ pytest
 | 파일 | 검증 내용 |
 |---|---|
 | `tests/test_chunking.py` | 청크 크기 상한, 청크 간 50토큰 겹침, 원문 누락 없음 |
-| `tests/test_rag_answer.py` | 유사도 하한, 근거 없을 때 LLM 미호출, `NO_ANSWER` 치환, 인용 번호 재정렬·중복 제거·지어낸 번호 제거 |
+| `tests/test_rag_answer.py` | 유사도 하한, 근거 없을 때 LLM 미호출, `NO_ANSWER` 치환, 인용 번호 재정렬·중복 제거·지어낸 번호 제거, 소속 그룹이 없으면 임베딩 없이 빈 결과 |
+| `tests/test_config.py` | `openai` 모드에서 키가 비어 있으면 기동 실패, 모드별 벡터 차원 |
+| `tests/test_embedding.py` | `local` 모드에서만 모델을 미리 불러오고 `openai` 모드에서는 건너뜀 |
 | `tests/test_worker.py` | 성공 시 ACK, 일시적 오류 재시도, 3회 실패·재시도 불가 오류 DLQ 이동, PEL 회수 |
 
 ---
@@ -331,3 +337,4 @@ flowchart LR
 ## 🔗 관련 저장소
 
 - Spring Boot 백엔드: [rag_wiki_project_backend](https://github.com/well0924/rag_wiki_project_backend)
+- Next.js 프론트: [rag_wiki_front](https://github.com/well0924/rag_wiki_front)
